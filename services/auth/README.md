@@ -1,53 +1,385 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Authentication Microservice
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A production-ready, secure, and scalable authentication microservice built with NestJS, featuring JWT-based authentication, email verification, password reset, rate limiting, and comprehensive security measures.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Features
 
-## Description
+### 🔐 Authentication & Authorization
+- JWT-based authentication with access and refresh tokens
+- Refresh token rotation and secure storage
+- Role-based access control (RBAC)
+- "Remember me" functionality with extended token expiration
+- Secure logout with token invalidation
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+### 🛡️ Security Features
+- Password hashing with bcrypt (12 salt rounds)
+- Account lockout after multiple failed login attempts
+- Rate limiting and throttling protection
+- Email verification for account activation
+- Password reset with secure token handling
+- Input validation and sanitization
+- Protection against brute-force attacks
+- Security headers (Helmet)
+- CORS configuration
 
-## Project setup
+### 📧 Email Integration
+- Email verification during registration
+- Password reset emails
+- Configurable SMTP settings
 
+### 📊 Monitoring & Logging
+- Comprehensive audit logging for security events
+- Login attempt tracking
+- Failed authentication monitoring
+- Winston-based logging system
+
+### 🏗️ Architecture
+- Horizontal scalability (no shared in-memory state)
+- Centralized error handling
+- Consistent API response patterns
+- Environment-based configuration
+- Database connection pooling with Prisma
+
+## Quick Start
+
+### Prerequisites
+- Node.js 18+
+- PostgreSQL 13+
+- npm or yarn
+
+### Installation
+
+1. Clone the repository and navigate to the auth service:
 ```bash
-$ npm install
+cd auth/services/auth
 ```
 
-## Compile and run the project
-
+2. Install dependencies:
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
 ```
 
-## Run tests
-
+3. Set up environment variables:
 ```bash
-# unit tests
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+4. Set up the database:
+```bash
+npx prisma migrate dev
+npx prisma generate
+```
+
+5. Start the service:
+```bash
+npm run start:dev
+```
+
+## API Endpoints
+
+### Authentication Endpoints
+
+#### POST /auth/register
+Register a new user account.
+
+**Request Body:**
+```json
+{
+  "complete_name": "John Doe",
+  "email": "john@example.com",
+  "password": "StrongPass123!",
+  "phone": "+1234567890",
+  "postal_code": "12345",
+  "role": "CLIENT"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "User registered successfully. Please check your email to verify your account.",
+  "user": {
+    "id": "uuid",
+    "complete_name": "John Doe",
+    "email": "john@example.com",
+    "role": "CLIENT",
+    "phone": "+1234567890",
+    "postal_code": "12345",
+    "email_verified": false,
+    "created_at": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+#### POST /auth/login
+Authenticate a user and return tokens.
+
+**Request Body:**
+```json
+{
+  "email": "john@example.com",
+  "password": "StrongPass123!",
+  "rememberMe": true
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Login successful",
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_in": 2592000,
+  "token_type": "Bearer",
+  "user": {
+    "id": "uuid",
+    "complete_name": "John Doe",
+    "email": "john@example.com",
+    "role": "CLIENT"
+  }
+}
+```
+
+#### POST /auth/refresh
+Refresh access token using refresh token.
+
+**Request Body:**
+```json
+{
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+#### POST /auth/verify-email
+Verify user email address.
+
+**Request Body:**
+```json
+{
+  "token": "verification-token-here"
+}
+```
+
+#### POST /auth/forgot-password
+Request password reset.
+
+**Request Body:**
+```json
+{
+  "email": "john@example.com"
+}
+```
+
+#### POST /auth/reset-password
+Reset password using reset token.
+
+**Request Body:**
+```json
+{
+  "token": "reset-token-here",
+  "newPassword": "NewStrongPass123!"
+}
+```
+
+### Protected Endpoints
+
+#### GET /auth/profile
+Get current user profile (requires authentication).
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+#### PUT /auth/change-password
+Change user password (requires authentication).
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Request Body:**
+```json
+{
+  "currentPassword": "CurrentPass123!",
+  "newPassword": "NewStrongPass123!"
+}
+```
+
+#### POST /auth/logout
+Logout user and invalidate tokens (requires authentication).
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | Required |
+| `JWT_ACCESS_SECRET` | Secret for access tokens | Required |
+| `JWT_REFRESH_SECRET` | Secret for refresh tokens | Required |
+| `SMTP_HOST` | SMTP server host | smtp.gmail.com |
+| `SMTP_PORT` | SMTP server port | 587 |
+| `SMTP_USER` | SMTP username | Required for email |
+| `SMTP_PASS` | SMTP password | Required for email |
+| `SMTP_FROM` | From email address | noreply@yourapp.com |
+| `FRONTEND_URL` | Frontend application URL | http://localhost:3000 |
+| `MAX_LOGIN_ATTEMPTS` | Max failed login attempts before lockout | 5 |
+| `LOCKOUT_DURATION_MINUTES` | Account lockout duration | 15 |
+| `ALLOWED_ORIGINS` | CORS allowed origins | http://localhost:3000 |
+| `NODE_ENV` | Environment (development/production) | development |
+| `PORT` | Server port | 3001 |
+
+### Security Settings
+
+- **Password Requirements:** Minimum 8 characters, 1 uppercase, 1 lowercase, 1 number, 1 special character
+- **Rate Limiting:** 10 requests per minute for auth endpoints, 100 requests per minute globally
+- **Token Expiration:** Access tokens: 15 minutes (30 days with remember me), Refresh tokens: 7 days (90 days with remember me)
+- **Account Lockout:** After 5 failed attempts, locked for 15 minutes
+
+## Database Schema
+
+The service uses PostgreSQL with the following main entities:
+
+### User
+- `id`: UUID primary key
+- `completeName`: Full name
+- `email`: Unique email address
+- `password`: Hashed password
+- `role`: User role (CLIENT/PROVIDER)
+- `phone`: Phone number
+- `postalCode`: Postal code
+- `emailVerified`: Email verification status
+- `emailVerificationToken`: Email verification token
+- `passwordResetToken`: Password reset token
+- `passwordResetExpires`: Password reset expiration
+- `refreshToken`: Hashed refresh token
+- `failedLoginAttempts`: Number of failed login attempts
+- `lockoutUntil`: Account lockout timestamp
+- `lastLoginAt`: Last login timestamp
+- `createdAt`: Account creation timestamp
+- `updatedAt`: Account update timestamp
+
+## Security Best Practices
+
+### Implemented Security Measures
+- **Password Security:** Bcrypt hashing with high salt rounds
+- **Token Security:** Separate secrets for access/refresh tokens, rotation on refresh
+- **Rate Limiting:** Prevents brute force and DoS attacks
+- **Account Protection:** Lockout after failed attempts
+- **Input Validation:** Comprehensive DTO validation
+- **CORS Protection:** Configured allowed origins
+- **Security Headers:** Helmet.js for secure headers
+- **Audit Logging:** Comprehensive security event logging
+
+### Production Deployment Checklist
+- [ ] Set strong, unique JWT secrets
+- [ ] Configure production SMTP settings
+- [ ] Set up database connection pooling
+- [ ] Enable HTTPS/TLS
+- [ ] Configure proper CORS origins
+- [ ] Set NODE_ENV=production
+- [ ] Implement log aggregation
+- [ ] Set up monitoring and alerting
+- [ ] Regular security updates
+- [ ] Database backups
+
+## Development
+
+### Running Tests
+```bash
+# Unit tests
+npm run test
+
+# E2E tests
+npm run test:e2e
+
+# Test coverage
+npm run test:cov
+```
+
+### Code Quality
+```bash
+# Linting
+npm run lint
+
+# Formatting
+npm run format
+```
+
+### Database Management
+```bash
+# Create migration
+npx prisma migrate dev --name migration-name
+
+# Reset database
+npx prisma migrate reset
+
+# View database
+npx prisma studio
+```
+
+## API Response Patterns
+
+### Success Response
+```json
+{
+  "message": "Operation successful",
+  "data": { ... },
+  "timestamp": "2024-01-01T00:00:00.000Z"
+}
+```
+
+### Error Response
+```json
+{
+  "statusCode": 400,
+  "message": "Validation failed",
+  "error": "Bad Request",
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "path": "/auth/login"
+}
+```
+
+## Monitoring
+
+The service includes comprehensive logging for:
+- Successful/failed login attempts
+- Password reset requests
+- Email verification events
+- Token refresh operations
+- Security violations
+- Account lockouts
+
+Logs are written to `logs/auth-security.log` and console.
+
+## Scalability Considerations
+
+- **Stateless Design:** No server-side sessions
+- **Database Connection Pooling:** Efficient database connections
+- **Rate Limiting:** Prevents resource exhaustion
+- **Token-based Auth:** Scales horizontally
+- **Async Operations:** Non-blocking email sending
+- **Configurable Limits:** Adjustable security thresholds
+
+## Contributing
+
+1. Follow the existing code style
+2. Add tests for new features
+3. Update documentation
+4. Ensure security best practices
+5. Run full test suite before submitting
+
+## License
+
+This project is licensed under the UNLICENSED license.
 $ npm run test
 
 # e2e tests
