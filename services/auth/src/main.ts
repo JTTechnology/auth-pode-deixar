@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import 'dotenv/config';
 
@@ -47,10 +48,31 @@ async function bootstrap() {
   // Trust proxy for proper IP detection
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
+  // Swagger API Documentation
+  const config = new DocumentBuilder()
+    .setTitle('Auth Service API')
+    .setDescription('Authentication and user management service API')
+    .setVersion('1.0')
+    .addTag('auth', 'Authentication endpoints')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Enter JWT token',
+        in: 'header',
+      },
+      'JWT-auth',
+    )
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
+
   const port = process.env.PORT || 3001;
   await app.listen(port);
 
-  Logger.log(`🚀 Auth service is running on: http://localhost:${port}`, 'Bootstrap');
-  Logger.log(`📚 API Documentation: http://localhost:${port}/api`, 'Bootstrap');
+  Logger.log(`Auth service is running on: http://localhost:${port}`, 'Bootstrap');
+  Logger.log(`API Documentation: http://localhost:${port}/api`, 'Bootstrap');
 }
 bootstrap();
