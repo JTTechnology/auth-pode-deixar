@@ -1,53 +1,579 @@
-# Authentication Microservice
+# Auth Service
 
-A production-ready, secure, and scalable authentication microservice built with NestJS, featuring JWT-based authentication, email verification, password reset, rate limiting, and comprehensive security measures.
+A robust and secure authentication service built with NestJS, providing JWT-based authentication, user registration, password management, email verification, and role-based access control.
 
 ## Features
 
-### 🔐 Authentication & Authorization
-- JWT-based authentication with access and refresh tokens
-- Refresh token rotation and secure storage
-- Role-based access control (RBAC)
-- "Remember me" functionality with extended token expiration
-- Secure logout with token invalidation
+- **User Registration** - Register new users with email verification
+- **Authentication** - JWT-based login with access and refresh tokens
+- **Email Verification** - Send verification emails to confirm user accounts
+- **Password Management** - Forgot password and reset password functionality
+- **Change Password** - Allow users to change their passwords securely
+- **Refresh Token Support** - Maintain user sessions with refresh tokens
+- **Role-Based Access Control** - Support for different user roles (CLIENT, PROVIDER)
+- **Security Features**:
+  - Bcrypt password hashing (12 rounds)
+  - Account lockout after multiple failed login attempts
+  - Rate limiting with Throttler
+  - Security headers with Helmet
+  - CORS protection
+  - Failed login attempt tracking
+  - Secure JWT token management
+  - Security event logging
+- **API Documentation** - Swagger/OpenAPI documentation
+- **Database** - PostgreSQL with Prisma ORM
+- **Logging** - Structured logging with Winston
+- **Email Service** - Nodemailer integration for transactional emails
 
-### 🛡️ Security Features
-- Password hashing with bcrypt (12 salt rounds)
-- Account lockout after multiple failed login attempts
-- Rate limiting and throttling protection
-- Email verification for account activation
-- Password reset with secure token handling
-- Input validation and sanitization
-- Protection against brute-force attacks
-- Security headers (Helmet)
-- CORS configuration
+## Prerequisites
 
-### 📧 Email Integration
-- Email verification during registration
-- Password reset emails
-- Configurable SMTP settings
-
-### 📊 Monitoring & Logging
-- Comprehensive audit logging for security events
-- Login attempt tracking
-- Failed authentication monitoring
-- Winston-based logging system
-
-### 🏗️ Architecture
-- Horizontal scalability (no shared in-memory state)
-- Centralized error handling
-- Consistent API response patterns
-- Environment-based configuration
-- Database connection pooling with Prisma
-
-## Quick Start
-
-### Prerequisites
-- Node.js 18+
-- PostgreSQL 13+
+- Node.js (v18 or higher)
 - npm or yarn
+- Docker and Docker Compose (for running PostgreSQL)
+- PostgreSQL (if not using Docker)
 
-### Installation
+## Installation
+
+1. **Clone the repository** and navigate to the service directory:
+```bash
+cd services/auth
+```
+
+2. **Install dependencies**:
+```bash
+npm install
+```
+
+3. **Setup environment variables**:
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your configuration values (see [Configuration](#configuration) section).
+
+4. **Setup the database** (Docker):
+```bash
+docker-compose up -d
+```
+
+This will start PostgreSQL and pgAdmin. The database will be initialized with the schema from `init.sql`.
+
+5. **Run Prisma migrations**:
+```bash
+npm run prisma:migrate
+```
+
+Alternatively, if needed to reset the database:
+```bash
+npm run prisma:reset
+```
+
+## Configuration
+
+Create a `.env` file in the root directory with the following variables:
+
+```env
+# Database Configuration
+DATABASE_URL="postgresql://postgres:root@localhost:5432/auth_db"
+
+# JWT Secrets (generate strong random strings)
+JWT_ACCESS_SECRET="your-super-secure-access-secret-key-here"
+JWT_REFRESH_SECRET="your-super-secure-refresh-secret-key-here"
+
+# Email Configuration (SMTP)
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT=587
+SMTP_USER="your-email@gmail.com"
+SMTP_PASS="your-app-password"
+SMTP_FROM="noreply@yourapp.com"
+
+# Frontend URL (for email links)
+FRONTEND_URL="http://localhost:3000"
+
+# Security Settings
+MAX_LOGIN_ATTEMPTS=5                    # Number of failed attempts before lockout
+LOCKOUT_DURATION_MINUTES=15             # Duration of account lockout
+
+# CORS Configuration
+ALLOWED_ORIGINS="http://localhost:3000,https://yourapp.com"
+
+# Application Settings
+NODE_ENV="development"                  # development, testing, production
+PORT=3001
+```
+
+### Email Configuration
+
+For Gmail:
+1. Enable **2-Step Verification** in your Google Account
+2. Generate an **App Password** (not your regular password)
+3. Use the App Password in `SMTP_PASS`
+
+For other email providers, update `SMTP_HOST` and `SMTP_PORT` accordingly.
+
+## Running the Service
+
+### Development Mode
+```bash
+npm run start:dev
+```
+The service will start with hot-reload enabled on `http://localhost:3001`.
+
+### Debug Mode
+```bash
+npm run start:debug
+```
+
+### Production Mode
+```bash
+npm run build
+npm run start:prod
+```
+
+## API Documentation
+
+Once the service is running, access the interactive API documentation at:
+```
+http://localhost:3001/api
+```
+
+### Authentication Endpoints
+
+#### Register User
+```
+POST /auth/register
+Content-Type: application/json
+
+{
+  "complete_name": "John Doe",
+  "email": "john@example.com",
+  "password": "SecurePassword123!",
+  "role": "CLIENT",
+  "phone": "+1234567890",
+  "postal_code": "12345-678"
+}
+
+Response (201):
+{
+  "message": "User registered successfully. Please check your email to verify your account.",
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "complete_name": "John Doe",
+    "email": "john@example.com",
+    "role": "CLIENT",
+    "phone": "+1234567890",
+    "postal_code": "12345-678",
+    "email_verified": false,
+    "created_at": "2026-04-12T12:00:00Z"
+  }
+}
+```
+
+#### Login
+```
+POST /auth/login
+Content-Type: application/json
+
+{
+  "email": "john@example.com",
+  "password": "SecurePassword123!"
+}
+
+Response (200):
+{
+  "message": "Login successful",
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_in": 900,
+  "token_type": "Bearer",
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "complete_name": "John Doe",
+    "email": "john@example.com",
+    "role": "CLIENT"
+  }
+}
+```
+
+#### Verify Email
+```
+POST /auth/verify-email
+Content-Type: application/json
+
+{
+  "token": "email-verification-token-from-email"
+}
+
+Response (200):
+{
+  "message": "Email verified successfully"
+}
+```
+
+#### Refresh Token
+```
+POST /auth/refresh
+Content-Type: application/json
+
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+
+Response (200):
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer"
+}
+```
+
+#### Forgot Password
+```
+POST /auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "john@example.com"
+}
+
+Response (200):
+{
+  "message": "Password reset instructions sent to your email"
+}
+```
+
+#### Reset Password
+```
+POST /auth/reset-password
+Content-Type: application/json
+
+{
+  "token": "password-reset-token-from-email",
+  "new_password": "NewSecurePassword123!"
+}
+
+Response (200):
+{
+  "message": "Password reset successfully"
+}
+```
+
+#### Change Password (Requires Authentication)
+```
+PUT /auth/change-password
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{
+  "current_password": "SecurePassword123!",
+  "new_password": "NewSecurePassword123!"
+}
+
+Response (200):
+{
+  "message": "Password changed successfully"
+}
+```
+
+## Using Tokens
+
+Include JWT tokens in API requests using the Authorization header:
+
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### Token Expiration
+- **Access Token**: 15 minutes (configurable)
+- **Refresh Token**: 7 days (configurable)
+
+When the access token expires, use the refresh token to get a new one without re-authenticating.
+
+## Database
+
+### Schema
+
+The application uses a `User` model with the following fields:
+
+```prisma
+model User {
+  id                      String    @id @default(uuid())
+  completeName            String
+  email                   String    @unique
+  password                String
+  role                    String
+  phone                   String
+  postalCode              String
+  emailVerified           Boolean   @default(false)
+  emailVerificationToken  String?
+  passwordResetToken      String?
+  passwordResetExpires    DateTime?
+  refreshToken            String?
+  failedLoginAttempts     Int       @default(0)
+  lockoutUntil            DateTime?
+  lastLoginAt             DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+}
+```
+
+### Database Management
+
+Access pgAdmin at `http://localhost:5050`:
+- Email: `admin@admin.com`
+- Password: `admin`
+
+Add PostgreSQL connection:
+- Host: `postgres_db`
+- Username: `postgres`
+- Password: `root`
+- Database: `auth_db`
+
+### Prisma Commands
+
+- `npm run prisma:generate` - Generate Prisma Client
+- `npm run prisma:migrate` - Create and apply migrations
+- `npm run prisma:reset` - Reset database (development only)
+- `npm run prisma:studio` - Open Prisma Studio GUI
+
+## Security Features
+
+### Password Security
+- **Bcrypt Hashing**: Passwords are hashed with 12 salt rounds
+- **No Password Logging**: Passwords are never logged
+- **Secure Comparison**: Safe password comparison to prevent timing attacks
+
+### Account Protection
+- **Failed Login Tracking**: Track failed login attempts
+- **Account Lockout**: Automatically lock accounts after multiple failed attempts
+  - Default: 5 attempts lock for 15 minutes
+  - Configurable via `MAX_LOGIN_ATTEMPTS` and `LOCKOUT_DURATION_MINUTES`
+- **Email Verification**: New accounts must verify their email
+
+### Security Headers
+- **Helmet.js**: Sets security HTTP headers (CSP, HSTS, etc.)
+- **CORS**: Restrict cross-origin requests
+- **Rate Limiting**: Throttle requests to prevent abuse
+
+### Token Security
+- **JWT**: Secure token-based authentication
+- **Refresh Tokens**: Separate tokens for session refresh
+- **Token Expiration**: Tokens expire automatically
+- **Secret Management**: Use strong, environment-based secrets
+
+### Logging
+- **Security Events**: Log important security events
+- **Failed Attempts**: Track and log login failures
+- **Registration**: Log all user registrations
+- **No Sensitive Data**: Sensitive data (passwords, tokens) are not logged
+
+## Testing
+
+### Run Unit Tests
+```bash
+npm run test
+```
+
+### Run Tests with Coverage
+```bash
+npm run test:cov
+```
+
+### Run Tests in Watch Mode
+```bash
+npm run test:watch
+```
+
+### Run E2E Tests
+```bash
+npm run test:e2e
+```
+
+## Project Structure
+
+```
+src/
+├── auth/                          # Authentication module
+│   ├── auth.service.ts           # Authentication business logic
+│   ├── auth.controller.ts        # API endpoints
+│   ├── auth.module.ts            # Module configuration
+│   ├── email.service.ts          # Email sending service
+│   ├── auth-logger.service.ts    # Security event logging
+│   ├── jwt.strategy.ts           # JWT strategy for Passport
+│   ├── jwt-auth.guard.ts         # JWT authentication guard
+│   ├── roles.guard.ts            # Role-based access control guard
+│   ├── roles.decorator.ts        # Decorator for role validation
+│   └── dto/                      # Data transfer objects
+│       ├── register.dto.ts
+│       ├── login.dto.ts
+│       ├── verify-email.dto.ts
+│       ├── refresh-token.dto.ts
+│       ├── forgot-password.dto.ts
+│       ├── reset-password.dto.ts
+│       └── change-password.dto.ts
+├── prisma/
+│   ├── prisma.service.ts         # Prisma client service
+│   └── prisma.module.ts          # Prisma module
+├── common/
+│   ├── global-exception.filter.ts # Global exception handling
+│   └── common.module.ts
+├── app.module.ts                 # Root application module
+├── app.controller.ts             # Root controller
+├── app.service.ts                # Root service
+└── main.ts                       # Application entry point
+
+prisma/
+├── schema.prisma                 # Database schema definition
+└── migrations/                   # Database migrations
+
+test/
+├── app.e2e-spec.ts              # E2E tests
+└── jest-e2e.json                # Jest E2E configuration
+```
+
+## Common Issues
+
+### Port Already in Use
+If port 3001 is already in use:
+```bash
+# Change PORT in .env
+PORT=3002
+npm run start:dev
+```
+
+### Database Connection Failed
+1. Ensure PostgreSQL is running:
+```bash
+docker-compose ps
+```
+
+2. Check database credentials in `.env`
+
+3. Verify DATABASE_URL format:
+```
+postgresql://user:password@localhost:5432/database_name
+```
+
+### Email Not Sending
+1. Enable **Less secure apps** or use **App Password** (Gmail)
+2. Check SMTP credentials in `.env`
+3. Verify `FRONTEND_URL` is correctly set
+4. Check service logs for email service errors
+
+### Migrations Failed
+Reset the database (development only):
+```bash
+npm run prisma:reset
+```
+
+## Development Workflow
+
+1. Start the database and dependencies:
+```bash
+docker-compose up -d
+```
+
+2. Run migrations:
+```bash
+npm run prisma:migrate
+```
+
+3. Start development server:
+```bash
+npm run start:dev
+```
+
+4. Access API documentation:
+```
+http://localhost:3001/api
+```
+
+5. Run tests:
+```bash
+npm run test:watch
+```
+
+## Deployment
+
+1. Build the application:
+```bash
+npm run build
+```
+
+2. Set production environment variables:
+```env
+NODE_ENV=production
+JWT_ACCESS_SECRET=<strong-random-secret>
+JWT_REFRESH_SECRET=<strong-random-secret>
+DATABASE_URL=<production-database-url>
+SMTP_HOST=<production-smtp-host>
+ALLOWED_ORIGINS=<production-domains>
+```
+
+3. Start the service:
+```bash
+npm run start:prod
+```
+
+4. Use a process manager (PM2, Docker, K8s) to keep the service running.
+
+## Environment Variables Reference
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NODE_ENV` | development | Application environment |
+| `PORT` | 3001 | Service port |
+| `DATABASE_URL` | - | PostgreSQL connection string |
+| `JWT_ACCESS_SECRET` | - | Secret for access tokens |
+| `JWT_REFRESH_SECRET` | - | Secret for refresh tokens |
+| `SMTP_HOST` | - | SMTP server host |
+| `SMTP_PORT` | 587 | SMTP server port |
+| `SMTP_USER` | - | SMTP authentication user |
+| `SMTP_PASS` | - | SMTP authentication password |
+| `SMTP_FROM` | - | Default sender email |
+| `FRONTEND_URL` | - | Frontend URL for email links |
+| `MAX_LOGIN_ATTEMPTS` | 5 | Failed attempts before lockout |
+| `LOCKOUT_DURATION_MINUTES` | 15 | Account lockout duration |
+| `ALLOWED_ORIGINS` | http://localhost:3000 | CORS allowed origins |
+
+## Code Quality
+
+- **Linting**:
+```bash
+npm run lint
+```
+
+- **Formatting**:
+```bash
+npm run format
+```
+
+- **Build**:
+```bash
+npm run build
+```
+
+## Technologies
+
+- **NestJS** - Progressive Node.js framework
+- **PostgreSQL** - Relational database
+- **Prisma** - Database ORM
+- **JWT** - JSON Web Tokens
+- **Bcrypt** - Password hashing
+- **Passport.js** - Authentication middleware
+- **Helmet** - Security headers
+- **Swagger/OpenAPI** - API documentation
+- **Winston** - Logging
+- **Jest** - Testing framework
+- **Nodemailer** - Email service
+
+## Support
+
+For issues, questions, or contributions, please refer to the project documentation or create an issue in the repository.
+
+## License
+
+Private - All rights reserved
 
 1. Clone the repository and navigate to the auth service:
 ```bash
