@@ -34,6 +34,8 @@ export class EmailService {
         <p>If you didn't create an account, please ignore this email.</p>
       `,
     });
+
+    return true;
   }
 
   async sendPasswordReset(email: string, token: string) {

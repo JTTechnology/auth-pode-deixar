@@ -25,11 +25,13 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { RolesGuard } from './roles.guard';
 import { Roles } from './roles.decorator';
+import { VerifyEmailDto } from './dto/verify-email.dto';
+
 
 @Controller('auth')
 @UseGuards(ThrottlerGuard)
@@ -148,6 +150,24 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Invalid or expired token' })
   verifyEmail(@Body() dto: VerifyEmailDto) {
     return this.authService.verifyEmail(dto);
+  }
+
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend email verification link' })
+  @ApiResponse({
+    status: 200,
+    description: 'Verification email sent',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'If the email exists, a new verification link has been sent' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Email already verified or invalid email' })
+  resendVerificationEmail(@Body() dto: ResendVerificationDto) {
+    return this.authService.resendVerificationEmail(dto);
   }
 
   @Post('forgot-password')
