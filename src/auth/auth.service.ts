@@ -14,11 +14,13 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AuthLoggerService } from './auth-logger.service';
 import { EmailService } from './email.service';
 import { ConfigService } from '@nestjs/config';
+import * as crypto from 'crypto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
 
 @Injectable()
 export class AuthService {
@@ -28,7 +30,7 @@ export class AuthService {
     private configService: ConfigService,
     private authLogger: AuthLoggerService,
     private emailService: EmailService,
-  ) {}
+  ) { }
 
   async register(dto: RegisterDto, ip?: string) {
     // Check if email already exists
@@ -44,8 +46,9 @@ export class AuthService {
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(dto.password, saltRounds);
 
-    // Generate email verification token
+    // Generate email verification token and expiration (24 hours)
     const emailVerificationToken = uuidv4();
+    const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     // Create user
     const user = await this.prisma.user.create({
@@ -57,6 +60,7 @@ export class AuthService {
         phone: dto.phone,
         postalCode: dto.postal_code,
         emailVerificationToken,
+        emailVerificationExpires,
       },
       select: {
         id: true,
@@ -124,29 +128,31 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(dto.password, user.password);
 
     if (!isPasswordValid) {
-      // Increment failed attempts
       const newAttempts = user.failedLoginAttempts + 1;
       const maxAttempts = this.configService.get<number>('MAX_LOGIN_ATTEMPTS') || 5;
       const lockoutDuration = this.configService.get<number>('LOCKOUT_DURATION_MINUTES') || 15;
 
       if (newAttempts >= maxAttempts) {
         const lockoutUntil = new Date(Date.now() + lockoutDuration * 60 * 1000);
-        await this.prisma.user.update({
+
+        await this.prisma.user.updateMany({
           where: { id: user.id },
           data: {
             failedLoginAttempts: newAttempts,
             lockoutUntil,
           },
         });
+
         this.authLogger.logSecurityEvent('account_locked', {
           email: dto.email,
           attempts: newAttempts,
           lockoutUntil,
           ip,
         });
+
         throw new ForbiddenException('Account locked due to multiple failed attempts');
       } else {
-        await this.prisma.user.update({
+        await this.prisma.user.updateMany({
           where: { id: user.id },
           data: { failedLoginAttempts: newAttempts },
         });
@@ -162,7 +168,7 @@ export class AuthService {
     }
 
     // Reset failed attempts and update last login
-    await this.prisma.user.update({
+    await this.prisma.user.updateMany({
       where: { id: user.id },
       data: {
         failedLoginAttempts: 0,
@@ -176,14 +182,14 @@ export class AuthService {
     const refreshToken = await this.generateRefreshToken(user);
 
     // Store refresh token
-    await this.prisma.user.update({
+    await this.prisma.user.updateMany({
       where: { id: user.id },
-      data: { refreshToken: await bcrypt.hash(refreshToken, 12) },
+      data: {
+        refreshToken: this.hashRefreshToken(refreshToken),
+      },
     });
 
-    // Set token expiration based on remember me
-    const accessExpiresIn = dto.rememberMe ? '30d' : '15m';
-    const refreshExpiresIn = dto.rememberMe ? '90d' : '7d';
+    const expiresIn = dto.rememberMe ? 30 * 24 * 60 * 60 : 15 * 60;
 
     this.authLogger.logLoginAttempt(dto.email, true, ip, userAgent);
 
@@ -191,7 +197,7 @@ export class AuthService {
       message: 'Login successful',
       access_token: accessToken,
       refresh_token: refreshToken,
-      expires_in: dto.rememberMe ? 30 * 24 * 60 * 60 : 15 * 60, // seconds
+      expires_in: expiresIn,
       token_type: 'Bearer',
       user: {
         id: user.id,
@@ -208,33 +214,31 @@ export class AuthService {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET') || 'refresh-secret-key',
       });
 
-      const user = await this.prisma.user.findUnique({
-        where: { id: payload.sub },
+      const hashedIncoming = this.hashRefreshToken(dto.refreshToken);
+
+      const user = await this.prisma.user.findFirst({
+        where: { id: payload.sub, refreshToken: hashedIncoming },
       });
 
-      if (!user || !user.refreshToken) {
+      if (!user) {
+        await this.prisma.user.updateMany({
+          where: { id: payload.sub },
+          data: { refreshToken: null },
+        });
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      const isRefreshTokenValid = await bcrypt.compare(dto.refreshToken, user.refreshToken);
-      if (!isRefreshTokenValid) {
-        // Token reuse detected - invalidate all refresh tokens
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: { refreshToken: null },
-        });
-        this.authLogger.logSecurityEvent('refresh_token_reuse', { userId: user.id });
-        throw new UnauthorizedException('Refresh token compromised');
-      }
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { refreshToken: null },
+      });
 
-      // Generate new tokens
       const newAccessToken = await this.generateAccessToken(user);
       const newRefreshToken = await this.generateRefreshToken(user);
 
-      // Update stored refresh token
       await this.prisma.user.update({
         where: { id: user.id },
-        data: { refreshToken: await bcrypt.hash(newRefreshToken, 12) },
+        data: { refreshToken: this.hashRefreshToken(newRefreshToken) },
       });
 
       this.authLogger.logTokenRefresh(user.id, true);
@@ -245,6 +249,7 @@ export class AuthService {
         token_type: 'Bearer',
       };
     } catch (error) {
+      if (error instanceof UnauthorizedException) throw error;
       this.authLogger.logTokenRefresh('unknown', false);
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -263,17 +268,63 @@ export class AuthService {
       throw new BadRequestException('Email already verified');
     }
 
+    // Check if token has expired
+    if (!user.emailVerificationExpires || user.emailVerificationExpires < new Date()) {
+      throw new BadRequestException('Verification token has expired. Please request a new verification email.');
+    }
+
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
         emailVerified: true,
         emailVerificationToken: null,
+        emailVerificationExpires: null,
       },
     });
 
     return {
       message: 'Email verified successfully',
     };
+  }
+
+  async resendVerificationEmail(dto: ResendVerificationDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (!user) {
+      // Don't reveal if email exists for security
+      return { message: 'If the email exists, a new verification link has been sent' };
+    }
+
+    if (user.emailVerified) {
+      throw new BadRequestException('Email is already verified');
+    }
+
+    // Generate new verification token and expiration
+    const emailVerificationToken = uuidv4();
+    const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerificationToken,
+        emailVerificationExpires,
+      },
+    });
+
+    // Send verification email
+    try {
+      await this.emailService.sendEmailVerification(dto.email, emailVerificationToken);
+    } catch (error) {
+      this.authLogger.logSecurityEvent('email_send_failed', {
+        email: dto.email,
+        type: 'verification',
+        error: error.message,
+      });
+    }
+
+    return { message: 'If the email exists, a new verification link has been sent' };
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
@@ -385,10 +436,15 @@ export class AuthService {
     const payload = {
       sub: user.id,
       type: 'refresh',
+      jti: uuidv4(),
     };
     return this.jwtService.signAsync(payload, {
       secret: this.configService.get<string>('JWT_REFRESH_SECRET') || 'refresh-secret-key',
       expiresIn: '7d',
     });
+  }
+
+  private hashRefreshToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
   }
 }

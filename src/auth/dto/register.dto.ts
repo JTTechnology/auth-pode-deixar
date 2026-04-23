@@ -1,5 +1,13 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsString, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsString,
+  Matches,
+  MinLength,
+  MaxLength
+} from 'class-validator';
 
 export class RegisterDto {
   @ApiProperty({
@@ -8,6 +16,11 @@ export class RegisterDto {
   })
   @IsString()
   @IsNotEmpty()
+  @MinLength(3)
+  @MaxLength(50)
+  @Matches(/^[\p{L}\s'-]+$/u, {
+    message: 'complete_name contains invalid characters',
+  })
   complete_name: string;
 
   @ApiProperty({
@@ -15,6 +28,7 @@ export class RegisterDto {
     example: 'john.doe@example.com',
   })
   @IsEmail()
+  @IsString()
   email: string;
 
   @ApiProperty({
@@ -45,6 +59,7 @@ export class RegisterDto {
     example: '12345-678',
   })
   @IsString()
+  @IsNotEmpty()
   postal_code: string;
 
   @ApiProperty({
