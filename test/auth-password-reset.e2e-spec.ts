@@ -4,6 +4,7 @@ import { App } from 'supertest/types';
 import {
   setupTestApp,
   cleanupDatabase,
+  teardownTestApp,
   createTestUser
 } from './test-setup';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -20,7 +21,7 @@ describe('Password Reset Flow', () => {
 
   afterAll(async () => {
     await cleanupDatabase(prisma);
-    await app.close();
+    await teardownTestApp(app);
   });
 
   beforeEach(async () => {

@@ -4,12 +4,14 @@ import { App } from 'supertest/types';
 import {
   setupTestApp,
   cleanupDatabase,
+  teardownTestApp,
   createTestUser,
   createProviderUser,
   createAdminUser,
   registerAndVerifyEmail,
 } from './test-setup';
 import { PrismaService } from '../src/prisma/prisma.service';
+import cleanupDatabase from './test-setup';
 
 describe('Admin Routes', () => {
   let app: INestApplication<App>;
@@ -23,7 +25,7 @@ describe('Admin Routes', () => {
 
   afterAll(async () => {
     await cleanupDatabase(prisma);
-    await app.close();
+    await teardownTestApp(app);
   });
 
   beforeEach(async () => {

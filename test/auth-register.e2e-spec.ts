@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { setupTestApp, cleanupDatabase, createTestUser } from './test-setup';
+import { setupTestApp, cleanupDatabase, teardownTestApp, createTestUser } from './test-setup';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('POST /auth/register', () => {
@@ -16,7 +16,7 @@ describe('POST /auth/register', () => {
 
   afterAll(async () => {
     await cleanupDatabase(prisma);
-    await app.close();
+    await teardownTestApp(app);
   });
 
   beforeEach(async () => {

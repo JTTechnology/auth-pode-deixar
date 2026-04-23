@@ -4,6 +4,7 @@ import { App } from 'supertest/types';
 import {
   setupTestApp,
   cleanupDatabase,
+  teardownTestApp,
   createTestUser,
   registerAndVerifyEmail,
 } from './test-setup';
@@ -21,7 +22,7 @@ describe('Security and Edge Cases', () => {
 
   afterAll(async () => {
     await cleanupDatabase(prisma);
-    await app.close();
+    await teardownTestApp(app);
   });
 
   beforeEach(async () => {

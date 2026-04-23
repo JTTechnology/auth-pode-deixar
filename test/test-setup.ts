@@ -17,6 +17,7 @@ export const createTestUser = (overrides: Partial<any> = {}) => ({
   ...overrides,
 });
 
+
 export const createProviderUser = () =>
   createTestUser({ role: 'PROVIDER' });
 
@@ -27,6 +28,7 @@ export async function setupTestApp(): Promise<{
   app: INestApplication<App>;
   prisma: PrismaService;
 }> {
+  
   const moduleFixture: TestingModule = await Test.createTestingModule({
     imports: [
       AppModule,
@@ -62,8 +64,13 @@ export async function setupTestApp(): Promise<{
   return { app, prisma };
 }
 
-export async function cleanupDatabase(prisma: PrismaService): Promise<void> {
-  await prisma.user.deleteMany();
+export async function teardownTestApp(app: INestApplication): Promise<void> {
+  // Close database connections first
+  const prisma = app.get(PrismaService);
+  await prisma.$disconnect();
+
+  // Close the NestJS app
+  await app.close();
 }
 
 export async function registerUser(
@@ -168,4 +175,10 @@ export async function registerAndVerifyEmail(
     refreshToken: loginResponse.body.refresh_token as string,
     verificationToken: token,
   };
+}
+
+export async function cleanupDatabase(prisma: PrismaService) {
+  await prisma.$transaction([
+    prisma.user.deleteMany(),
+  ]);
 }

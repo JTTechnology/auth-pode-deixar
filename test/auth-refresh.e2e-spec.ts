@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { setupTestApp, cleanupDatabase, createTestUser, registerAndLogin } from './test-setup';
+import { setupTestApp, cleanupDatabase, teardownTestApp, createTestUser, registerAndLogin } from './test-setup';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('POST /auth/refresh', () => {
@@ -16,7 +16,7 @@ describe('POST /auth/refresh', () => {
 
   afterAll(async () => {
     await cleanupDatabase(prisma);
-    await app.close();
+    await teardownTestApp(app);
   });
 
   beforeEach(async () => {
@@ -44,10 +44,10 @@ describe('POST /auth/refresh', () => {
     const tokens = await registerAndLogin(app, user);
     const refreshToken = tokens.refreshToken;
 
-    // await request(app.getHttpServer())
-    //   .post('/auth/refresh')
-    //   .send({ refreshToken })
-    //   .expect(200);
+    await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .send({ refreshToken })
+      .expect(200);
 
     await request(app.getHttpServer())
       .post('/auth/refresh')
