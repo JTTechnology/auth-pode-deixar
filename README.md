@@ -384,55 +384,7 @@ npm run test:cov
 npm run test:watch
 ```
 
-### Run E2E Tests
-```bash
-npm run test:e2e
-```
-
-## Project Structure
-
-```
-src/
-├── auth/                          # Authentication module
-│   ├── auth.service.ts           # Authentication business logic
-│   ├── auth.controller.ts        # API endpoints
-│   ├── auth.module.ts            # Module configuration
-│   ├── email.service.ts          # Email sending service
-│   ├── auth-logger.service.ts    # Security event logging
-│   ├── jwt.strategy.ts           # JWT strategy for Passport
-│   ├── jwt-auth.guard.ts         # JWT authentication guard
-│   ├── roles.guard.ts            # Role-based access control guard
-│   ├── roles.decorator.ts        # Decorator for role validation
-│   └── dto/                      # Data transfer objects
-│       ├── register.dto.ts
-│       ├── login.dto.ts
-│       ├── verify-email.dto.ts
-│       ├── refresh-token.dto.ts
-│       ├── forgot-password.dto.ts
-│       ├── reset-password.dto.ts
-│       └── change-password.dto.ts
-├── prisma/
-│   ├── prisma.service.ts         # Prisma client service
-│   └── prisma.module.ts          # Prisma module
-├── common/
-│   ├── global-exception.filter.ts # Global exception handling
-│   └── common.module.ts
-├── app.module.ts                 # Root application module
-├── app.controller.ts             # Root controller
-├── app.service.ts                # Root service
-└── main.ts                       # Application entry point
-
-prisma/
-├── schema.prisma                 # Database schema definition
-└── migrations/                   # Database migrations
-
-test/
-├── app.e2e-spec.ts              # E2E tests
-└── jest-e2e.json                # Jest E2E configuration
-```
-
 ## Common Issues
-
 ### Port Already in Use
 If port 3001 is already in use:
 ```bash
