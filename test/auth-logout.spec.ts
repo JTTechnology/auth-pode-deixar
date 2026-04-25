@@ -3,10 +3,10 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import {
   setupTestApp,
-  cleanupDatabase,
-  teardownTestApp,
   createTestUser,
-  registerAndVerifyEmail
+  registerAndLogin,
+  bearerAuth,
+  teardownTestApp
 } from './test-setup';
 import { PrismaService } from '../src/prisma/prisma.service';
 
@@ -21,44 +21,31 @@ describe('POST /auth/logout', () => {
   });
 
   afterAll(async () => {
-    await cleanupDatabase(prisma);
-    await teardownTestApp(app);
+    await teardownTestApp(app, prisma);
   });
-
-  beforeEach(async () => {
-    await cleanupDatabase(prisma);
-  });
-
-  it('should logout successfully', async () => {
+  
+  it('should logout successfully and invalidate the refresh token in the DB', async () => {
     const user = createTestUser();
-
-    const tokens = await registerAndVerifyEmail(app, user);
-    const accessToken = tokens.accessToken;
+    const { accessToken } = await registerAndLogin(app, user, prisma);
 
     const response = await request(app.getHttpServer())
       .post('/auth/logout')
-      .set('Authorization', `Bearer ${accessToken}`)
+      .set(bearerAuth(accessToken))
       .expect(200);
 
     expect(response.body).toHaveProperty('message', 'Logged out successfully');
 
-    // Verify refresh token is invalidated
-    const dbUser = await prisma.user.findUnique({
-      where: { email: user.email },
-    });
-
+    const dbUser = await prisma.user.findUnique({ where: { email: user.email } });
     expect(dbUser?.refreshToken).toBeNull();
   });
 
-  it('should fail logout without authentication', async () => {
-    const response = await request(app.getHttpServer())
-      .post('/auth/logout')
-      .expect(401);
+  it('should reject logout without authentication with 401', async () => {
+    const response = await request(app.getHttpServer()).post('/auth/logout').expect(401);
 
     expect(response.body).toHaveProperty('message');
   });
 
-  it('should fail logout with invalid token', async () => {
+  it('should reject logout with an invalid token with 401', async () => {
     const response = await request(app.getHttpServer())
       .post('/auth/logout')
       .set('Authorization', 'Bearer invalid-token')

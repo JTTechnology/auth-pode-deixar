@@ -2,42 +2,67 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { AppModule } from './../src/app.module';
+import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { EmailService } from '../src/auth/email.service';
 import { ThrottlerModule } from '@nestjs/throttler';
 
-export const createTestUser = (overrides: Partial<any> = {}) => ({
-  complete_name: "Test User",
-  email: `test_${Date.now()}_${Math.random()}@gmail.com`,
-  password: "TestPassword123!",
-  phone: "+1234567890",
-  postal_code: "12345-678",
-  role: "CLIENT",
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface TestUser {
+  complete_name: string;
+  email: string;
+  password: string;
+  phone: string;
+  postal_code: string;
+  role: 'CLIENT' | 'PROVIDER' | 'ADMIN';
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface TestAppSetup {
+  app: INestApplication<App>;
+  prisma: PrismaService;
+}
+
+// ─── User Factories ───────────────────────────────────────────────────────────
+
+/**
+ * Creates a unique test user to avoid email collisions across parallel runs.
+ * Uses both Date.now() and Math.random() for uniqueness.
+ */
+export const createTestUser = (overrides: Partial<TestUser> = {}): TestUser => ({
+  complete_name: 'Test User',
+  email: `test_${Date.now()}_${Math.random().toString(36).slice(2)}@example.com`,
+  password: 'TestPassword123!',
+  phone: '+1234567890',
+  postal_code: '12345-678',
+  role: 'CLIENT',
   ...overrides,
 });
 
+export const createProviderUser = (overrides: Partial<TestUser> = {}): TestUser =>
+  createTestUser({ complete_name: 'Provider User', role: 'PROVIDER', ...overrides });
 
-export const createProviderUser = () =>
-  createTestUser({ role: 'PROVIDER' });
+export const createAdminUser = (overrides: Partial<TestUser> = {}): TestUser =>
+  createTestUser({ complete_name: 'Admin User', role: 'ADMIN', ...overrides });
 
-export const createAdminUser = () =>
-  createTestUser({ role: 'ADMIN' });
+// ─── App Lifecycle ────────────────────────────────────────────────────────────
 
-export async function setupTestApp(): Promise<{
-  app: INestApplication<App>;
-  prisma: PrismaService;
-}> {
-  
-  const moduleFixture: TestingModule = await Test.createTestingModule({
+/**
+ * Bootstraps the NestJS app for E2E tests.
+ * - Overrides EmailService to prevent real emails being sent.
+ * - Sets a high throttle limit so rate limiting doesn't interfere with tests.
+ * - Applies the same ValidationPipe configuration used in production.
+ */
+export async function setupTestApp(): Promise<TestAppSetup> {
+  const moduleFixture = await Test.createTestingModule({
     imports: [
       AppModule,
-      ThrottlerModule.forRoot([
-        {
-          ttl: 60000,
-          limit: 10000,
-        },
-      ]),
+      ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10_000 }]),
     ],
   })
     .overrideProvider(EmailService)
@@ -57,26 +82,22 @@ export async function setupTestApp(): Promise<{
     }),
   );
 
-  const prisma = app.get(PrismaService);
-
   await app.init();
+
+  const prisma = moduleFixture.get(PrismaService);
 
   return { app, prisma };
 }
 
-export async function teardownTestApp(app: INestApplication): Promise<void> {
-  // Close database connections first
-  const prisma = app.get(PrismaService);
-  await prisma.$disconnect();
+// ─── Auth Flow Helpers ────────────────────────────────────────────────────────
 
-  // Close the NestJS app
-  await app.close();
-}
-
+/**
+ * Registers a user via the API and asserts HTTP 201.
+ */
 export async function registerUser(
   app: INestApplication,
-  user: any,
-) {
+  user: TestUser,
+): Promise<request.Response> {
   return request(app.getHttpServer())
     .post('/auth/register')
     .send(user)
@@ -84,47 +105,57 @@ export async function registerUser(
 }
 
 /**
- * ✔ SIMPLES E CONFIÁVEL
- * Não depende de token nem endpoint
+ * Fetches the email verification token directly from the DB and calls the
+ * verify-email endpoint. Throws descriptive errors if the user or token is
+ * missing so test failures are easy to diagnose.
  */
-export async function forceVerifyEmail(
+export async function verifyEmailViaApi(
   app: INestApplication,
   email: string,
   prisma?: PrismaService,
-) {
-  const dbPrisma = prisma || (app as any).get(PrismaService);
+): Promise<void> {
+  const db: PrismaService = prisma ?? app.get(PrismaService);
 
-  await dbPrisma.user.update({
-    where: { email },
-    data: {
-      emailVerified: true,
-      emailVerificationToken: null,
-    },
-  });
+  const user = await db.user.findUnique({ where: { email } });
+
+  if (!user) throw new Error(`[verifyEmailViaApi] User not found: ${email}`);
+  if (!user.emailVerificationToken)
+    throw new Error(
+      `[verifyEmailViaApi] emailVerificationToken is missing for ${email}. ` +
+        'Check the registration flow.',
+    );
+
+  await request(app.getHttpServer())
+    .post('/auth/verify-email')
+    .send({ token: user.emailVerificationToken })
+    .expect(200);
 }
 
+/**
+ * Logs in an already-registered and verified user. Asserts HTTP 200.
+ */
 export async function loginUser(
   app: INestApplication,
   email: string,
   password: string,
-) {
+): Promise<request.Response> {
   return request(app.getHttpServer())
     .post('/auth/login')
-    .send({email: email, password: password })
+    .send({ email, password })
     .expect(200);
 }
 
 /**
- * ✔ fluxo padrão para quase todos os testes
+ * Full happy-path shortcut: register → verify email → login.
+ * Returns typed access/refresh tokens ready for use in test assertions.
  */
 export async function registerAndLogin(
   app: INestApplication,
-  user: any,
+  user: TestUser,
   prisma?: PrismaService,
-) {
+): Promise<AuthTokens> {
   await registerUser(app, user);
-
-  await forceVerifyEmail(app, user.email, prisma);
+  await verifyEmailViaApi(app, user.email, prisma);
 
   const loginResponse = await loginUser(app, user.email, user.password);
 
@@ -135,50 +166,38 @@ export async function registerAndLogin(
 }
 
 /**
- * ✔ se realmente precisar simular verify-email
+ * Elevates an existing user to ADMIN role directly in the DB.
+ * Useful for tests that need admin access without going through a separate
+ * admin-creation flow.
  */
-export async function registerAndVerifyEmail(
-  app: INestApplication,
-  user: any,
-  prisma?: PrismaService,
-) {
-  await registerUser(app, user);
-
-  const dbPrisma = prisma || (app as any).get(PrismaService);
-
-  const dbUser = await dbPrisma.user.findUnique({
-    where: { email: user.email },
+export async function promoteToAdmin(
+  prisma: PrismaService,
+  email: string,
+): Promise<void> {
+  const updated = await prisma.user.update({
+    where: { email },
+    data: { role: 'ADMIN' },
+    select: { role: true },
   });
 
-  if (!dbUser) {
-    throw new Error('User not found');
+  if (updated.role !== 'ADMIN') {
+    throw new Error(
+      `[promoteToAdmin] Failed to promote ${email} — role is still ${updated.role}`,
+    );
   }
-
-  const token = dbUser.emailVerificationToken ?? 'test-token';
-
-  await dbPrisma.user.update({
-    where: { email: user.email },
-    data: {
-      emailVerificationToken: token,
-    },
-  });
-
-  await request(app.getHttpServer())
-    .post('/auth/verify-email')
-    .send({ token: token })
-    .expect(200);
-
-  const loginResponse = await loginUser(app, user.email, user.password);
-
-  return {
-    accessToken: loginResponse.body.access_token as string,
-    refreshToken: loginResponse.body.refresh_token as string,
-    verificationToken: token,
-  };
 }
 
-export async function cleanupDatabase(prisma: PrismaService) {
-  await prisma.$transaction([
-    prisma.user.deleteMany(),
-  ]);
+/**
+ * Returns a bearer-auth header object for use with supertest's .set().
+ */
+export const bearerAuth = (token: string) => ({
+  Authorization: `Bearer ${token}`,
+});
+
+export async function teardownTestApp(
+  app: INestApplication,
+  prisma: PrismaService,
+): Promise<void> {
+  await prisma.$disconnect(); // fecha conexão com banco
+  await app.close();          // fecha HTTP server do Nest
 }
