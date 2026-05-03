@@ -12,7 +12,7 @@ A robust and secure authentication service built with NestJS, providing JWT-base
 - **Refresh Token Support** - Maintain user sessions with refresh tokens
 - **Role-Based Access Control** - Support for different user roles (CLIENT, PROVIDER)
 - **Security Features**:
-  - Bcrypt password hashing (12 rounds)
+  - Argon2 password hashing
   - Account lockout after multiple failed login attempts
   - Rate limiting with Throttler
   - Security headers with Helmet
