@@ -13,6 +13,7 @@ export interface TestUser {
   complete_name: string;
   email: string;
   password: string;
+  confirm_password: string;
   phone: string;
   postal_code: string;
   role: 'CLIENT' | 'PROVIDER' | 'ADMIN';
@@ -38,6 +39,7 @@ export const createTestUser = (overrides: Partial<TestUser> = {}): TestUser => (
   complete_name: 'Test User',
   email: `test_${Date.now()}_${Math.random().toString(36).slice(2)}@example.com`,
   password: 'TestPassword123!',
+  confirm_password: 'TestPassword123!',
   phone: '+1234567890',
   postal_code: '12345-678',
   role: 'CLIENT',

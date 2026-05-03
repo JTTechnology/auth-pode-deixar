@@ -113,5 +113,16 @@ describe('POST /auth/register', () => {
         .send({ ...user, postal_code: '' })
         .expect(400);
     });
+
+    it('should reject mismatched passwords', async () => {
+      const user = createTestUser();
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ ...user, confirm_password: 'DifferentPassword123!' })
+        .expect(400);
+
+      expect(response.body.message).toContain('do not match');
+    });
   });
 });

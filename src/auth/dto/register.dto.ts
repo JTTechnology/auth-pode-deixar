@@ -47,6 +47,15 @@ export class RegisterDto {
   password: string;
 
   @ApiProperty({
+    description: 'User\'s password confirmation (must match password field)',
+    example: 'Password123!',
+    minLength: 8,
+  })
+  @IsString()
+  @IsNotEmpty()
+  confirm_password: string;
+
+  @ApiProperty({
     description: 'User\'s phone number',
     example: '+1234567890',
   })
