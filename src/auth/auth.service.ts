@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import * as argon2 from 'argon2';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
@@ -43,8 +43,7 @@ export class AuthService {
     }
 
     // Hash password
-    const saltRounds = 12;
-    const passwordHash = await bcrypt.hash(dto.password, saltRounds);
+    const passwordHash = await argon2.hash(dto.password);
 
     // Generate email verification token and expiration (24 hours)
     const emailVerificationToken = uuidv4();
@@ -125,7 +124,7 @@ export class AuthService {
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(dto.password, user.password);
+    const isPasswordValid = await argon2.verify(user.password, dto.password);
 
     if (!isPasswordValid) {
       const newAttempts = user.failedLoginAttempts + 1;
@@ -370,7 +369,7 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired reset token');
     }
 
-    const hashedPassword = await bcrypt.hash(dto.newPassword, 12);
+    const hashedPassword = await argon2.hash(dto.newPassword);
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -395,12 +394,12 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    const isCurrentPasswordValid = await bcrypt.compare(dto.currentPassword, user.password);
+    const isCurrentPasswordValid = await argon2.verify(user.password, dto.currentPassword);
     if (!isCurrentPasswordValid) {
       throw new BadRequestException('Current password is incorrect');
     }
 
-    const hashedNewPassword = await bcrypt.hash(dto.newPassword, 12);
+    const hashedNewPassword = await argon2.hash(dto.newPassword);
 
     await this.prisma.user.update({
       where: { id: userId },
