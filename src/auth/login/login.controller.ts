@@ -122,6 +122,25 @@ export class LoginController {
   @ApiResponse({
     status: 200,
     description: 'User profile retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        user: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            complete_name: { type: 'string' },
+            email: { type: 'string' },
+            role: { type: 'string' },
+            phone: { type: 'string' },
+            postal_code: { type: 'string' },
+            email_verified: { type: 'boolean' },
+            created_at: { type: 'string', format: 'date-time' },
+            last_login_at: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    },
   })
   @ApiBearerAuth()
   @ApiHeader({
@@ -130,7 +149,8 @@ export class LoginController {
     required: true,
   })
   async getProfile(@Request() req: any) {
-    return this.loginService.getProfile(req.user.id);
+    const profile = await this.loginService.getProfile(req.user.id);
+    return { user: profile };
   }
 
   @Get('admin')
@@ -139,7 +159,7 @@ export class LoginController {
   @ApiOperation({ summary: 'Admin-only endpoint' })
   @ApiResponse({
     status: 200,
-    description: 'Admin access granted',
+    description: 'This is admin only data',
   })
   @ApiBearerAuth()
   @ApiHeader({
@@ -148,6 +168,6 @@ export class LoginController {
     required: true,
   })
   async adminOnly() {
-    return { message: 'Admin access granted' };
+    return { message: 'This is admin only data' };
   }
 }

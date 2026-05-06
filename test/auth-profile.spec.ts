@@ -42,9 +42,9 @@ describe('GET /auth/profile', () => {
     expect(response.body).toHaveProperty('user');
     expect(response.body.user).toMatchObject({
       email: user.email,
-      completeName: user.complete_name,
+      complete_name: user.complete_name,
       role: user.role,
-      emailVerified: true,
+      email_verified: true,
     });
     expect(response.body.user).not.toHaveProperty('password');
   });
